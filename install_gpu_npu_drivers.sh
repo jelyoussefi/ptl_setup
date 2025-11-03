@@ -55,6 +55,74 @@ check_root() {
     fi
 }
 
+# Function to purge existing drivers
+purge_existing_drivers() {
+    print_header "🗑️  Purging existing Intel drivers and conflicting packages..."
+    
+    # List of packages that commonly conflict
+    local conflicting_packages=(
+        "libmfxgen1"
+        "libmfx-gen1"
+        "libmfx1"
+        "intel-media-va-driver"
+        "intel-media-va-driver-non-free"
+        "libze-intel-gpu1"
+        "libze1"
+        "intel-metrics-discovery"
+        "intel-opencl-icd"
+        "intel-gsc"
+        "libvpl2"
+        "libvpl-tools"
+        "libva-glx2"
+        "intel-media-driver"
+        "gmmlib"
+        "intel-igc-core"
+        "intel-igc-cm"
+        "intel-level-zero-gpu"
+        "level-zero"
+        "level-zero-dev"
+    )
+    
+    print_status "Stopping any running applications that might use GPU drivers..."
+    # Kill processes that might be using the drivers
+    sudo pkill -f intel || true
+    
+    print_status "Removing conflicting packages..."
+    for package in "${conflicting_packages[@]}"; do
+        if dpkg -l | grep -q "^ii.*$package"; then
+            print_status "Removing package: $package"
+            sudo apt-get remove --purge -y "$package" 2>/dev/null || true
+        fi
+    done
+    
+    # Remove any orphaned packages
+    print_status "Removing orphaned packages..."
+    sudo apt-get autoremove -y
+    
+    # Clean package cache
+    print_status "Cleaning package cache..."
+    sudo apt-get autoclean
+    sudo apt-get clean
+    
+    # Force remove any remaining problematic files
+    print_status "Cleaning up residual driver files..."
+    sudo rm -rf /usr/lib/x86_64-linux-gnu/libmfx* 2>/dev/null || true
+    sudo rm -rf /usr/lib/x86_64-linux-gnu/intel-* 2>/dev/null || true
+    sudo rm -rf /etc/OpenCL/vendors/intel* 2>/dev/null || true
+    
+    # Remove any existing Intel GPU PPA if present
+    print_status "Removing existing Intel graphics PPA..."
+    sudo add-apt-repository --remove -y ppa:kobuk-team/intel-graphics 2>/dev/null || true
+    
+    # Fix any broken packages
+    print_status "Fixing any broken package dependencies..."
+    sudo apt-get update
+    sudo dpkg --configure -a
+    sudo apt-get install -f -y
+    
+    print_success "Existing driver purge completed"
+}
+
 # Function to check system compatibility
 check_system() {
     print_header "🔍 Checking system compatibility..."
@@ -274,11 +342,12 @@ main() {
     print_header "📋 For Ubuntu 24.04 LTS"
     echo "================================================================"
     echo
-    print_status "This script will install:"
-    echo "  • Intel GPU drivers and OpenCL support"
-    echo "  • Intel media acceleration drivers (VA-API)"
-    echo "  • Intel NPU (Neural Processing Unit) drivers"
-    echo "  • Required libraries and tools"
+    print_status "This script will:"
+    echo "  • Purge any existing conflicting Intel drivers"
+    echo "  • Install Intel GPU drivers and OpenCL support"
+    echo "  • Install Intel media acceleration drivers (VA-API)"
+    echo "  • Install Intel NPU (Neural Processing Unit) drivers"
+    echo "  • Configure user permissions and verify installations"
     echo
     
     # Check if running as root
@@ -292,27 +361,31 @@ main() {
     check_system
     echo
     
-    # Step 2: Prepare environment
+    # Step 2: Purge existing drivers
+    purge_existing_drivers
+    echo
+    
+    # Step 3: Prepare environment
     prepare_environment
     echo
     
-    # Step 3: Install GPU drivers
+    # Step 4: Install GPU drivers
     install_gpu_drivers
     echo
     
-    # Step 4: Install NPU drivers
+    # Step 5: Install NPU drivers
     install_npu_drivers
     echo
     
-    # Step 5: Verify installations
+    # Step 6: Verify installations
     verify_installations
     echo
     
-    # Step 6: Cleanup
+    # Step 7: Cleanup
     cleanup
     echo
     
-    # Step 7: Display completion message
+    # Step 8: Display completion message
     display_completion
 }
 
