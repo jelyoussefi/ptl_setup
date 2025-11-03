@@ -120,13 +120,6 @@ configure_kernel() {
         make defconfig
     fi
     
-    # Optional: Allow user to customize config
-    read -p "Do you want to customize kernel configuration? (y/N): " -n 1 -r
-    echo
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        make menuconfig
-    fi
-    
     print_success "Kernel configuration completed"
 }
 
@@ -255,17 +248,7 @@ main() {
     echo "  • Update system firmware"
     echo "  • Update bootloader configuration"
     echo
-    print_warning "⚠️  This process can take 30 minutes to several hours depending on your hardware."
-    print_warning "⚠️  Ensure you have at least 20GB of free disk space."
-    print_warning "⚠️  Keep your system plugged in if using a laptop."
     echo
-    
-    read -p "Do you want to continue? (y/N): " -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        print_status "Installation cancelled by user."
-        exit 0
-    fi
     
     # Check if running as root
     check_root
