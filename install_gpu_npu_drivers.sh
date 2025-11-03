@@ -222,7 +222,7 @@ install_npu_drivers() {
     if [[ -f "$NPU_DRIVER_FILENAME" ]]; then
         print_status "NPU driver archive already exists, using existing file"
     else
-        wget "$NPU_DRIVER_URL"
+        wget --no-check-certificate "$NPU_DRIVER_URL"
     fi
     
     # Extract NPU driver
