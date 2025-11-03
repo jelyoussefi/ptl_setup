@@ -6,7 +6,8 @@
 # This script automates the installation of Intel GPU and NPU 
 # drivers for enhanced graphics and AI acceleration performance.
 # 
-# Usage: ./install_gpu_npu_drivers.sh
+# Usage: ./install_gpu_npu_drivers.sh [-f]
+#   -f : Force purge of existing Intel drivers before installation
 # ================================================================
 
 set -e  # Exit on any error
@@ -55,8 +56,15 @@ check_root() {
     fi
 }
 
-# Function to purge existing drivers
+# Function to purge existing drivers (only when -f flag is used)
 purge_existing_drivers() {
+    local force_purge=$1
+    
+    if [[ "$force_purge" != "true" ]]; then
+        print_status "Skipping driver purge (use -f flag to force purge existing drivers)"
+        return 0
+    fi
+    
     print_header "🗑️  Purging existing Intel drivers and conflicting packages..."
     
     # List of packages that commonly conflict
@@ -222,11 +230,41 @@ install_npu_drivers() {
     if [[ -f "$NPU_DRIVER_FILENAME" ]]; then
         print_status "NPU driver archive already exists, using existing file"
     else
-        wget --no-check-certificate "$NPU_DRIVER_URL"
+        print_status "Attempting to download NPU driver from Intel's repository..."
+        if wget --no-check-certificate "$NPU_DRIVER_URL"; then
+            print_success "NPU driver downloaded successfully"
+        else
+            print_error "Failed to download NPU driver (Error $?)"
+            print_warning "This could be due to:"
+            print_warning "  • 403 Forbidden - Access restricted to Intel internal networks"
+            print_warning "  • Network connectivity issues"
+            print_warning "  • Server maintenance"
+            echo
+            print_status "Alternative options:"
+            print_status "  1. Download manually from Intel's official support site"
+            print_status "  2. Use Intel's driver installer from intel.com"
+            print_status "  3. Skip NPU installation and continue with GPU drivers only"
+            echo
+            
+            read -p "Do you want to continue without NPU drivers? (y/N): " -n 1 -r
+            echo
+            if [[ $REPLY =~ ^[Yy]$ ]]; then
+                print_status "Continuing with GPU driver installation only..."
+                return 0
+            else
+                print_error "NPU driver installation cancelled. Exiting..."
+                exit 1
+            fi
+        fi
     fi
     
     # Extract NPU driver
     print_status "Extracting NPU driver archive..."
+    if [[ ! -f "$NPU_DRIVER_FILENAME" ]]; then
+        print_error "NPU driver archive not found. Skipping NPU installation."
+        return 0
+    fi
+    
     if [[ -d "$NPU_DRIVER_DIR" ]]; then
         print_status "Removing existing extraction directory..."
         rm -rf "$NPU_DRIVER_DIR"
@@ -235,6 +273,11 @@ install_npu_drivers() {
     
     # Install NPU driver
     print_status "Installing Intel NPU driver..."
+    if [[ ! -d "$NPU_DRIVER_DIR" ]]; then
+        print_error "NPU driver directory not found. Skipping NPU installation."
+        return 0
+    fi
+    
     cd "$NPU_DRIVER_DIR"
     chmod a+x ./npu-drv-installer
     sudo ./npu-drv-installer
@@ -335,6 +378,21 @@ display_completion() {
 
 # Main function
 main() {
+    local force_purge=false
+    
+    # Parse command line arguments
+    while getopts "f" opt; do
+        case $opt in
+            f)
+                force_purge=true
+                ;;
+            \?)
+                echo "Usage: $0 [-f]"
+                echo "  -f : Force purge of existing Intel drivers before installation"
+                exit 1
+                ;;
+        esac
+    done
     # Display welcome message
     clear
     echo "================================================================"
@@ -343,11 +401,12 @@ main() {
     echo "================================================================"
     echo
     print_status "This script will:"
-    echo "  • Purge any existing conflicting Intel drivers"
     echo "  • Install Intel GPU drivers and OpenCL support"
     echo "  • Install Intel media acceleration drivers (VA-API)"
     echo "  • Install Intel NPU (Neural Processing Unit) drivers"
     echo "  • Configure user permissions and verify installations"
+    echo
+    print_status "Use -f flag to force purge existing drivers before installation"
     echo
     
     # Check if running as root
@@ -361,8 +420,9 @@ main() {
     check_system
     echo
     
-    # Step 2: Purge existing drivers
-    purge_existing_drivers
+    # Step 2: Purge existing drivers (only with -f flag)
+    purge_existing_drivers "$force_purge"
+    echo
     echo
     
     # Step 3: Prepare environment
